@@ -14,7 +14,7 @@ enum HttpMothod{
 };
 
 
-struct HttpHead{
+struct HttpRequestHead{
   //方法类型
   HttpMothod method_ = HM_GET;
   std::string url_="/";           //uri部分
@@ -52,14 +52,29 @@ struct HttpHead{
     std::pair<std::string, std::string>("Host","www.hao123.com"),
 
     //浏览器类型标识，没有特殊原因直接用默认的这个应该没啥问题
-    std::pair<std::string, std::string>("User-Agent","Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Ubuntu Chromium/68.0.3440.75 Chrome/68.0.3440.75 Safari/537.36\r\n")
+    std::pair<std::string, std::string>("User-Agent","Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Ubuntu Chromium/68.0.3440.75 Chrome/68.0.3440.75 Safari/537.36")
   };
 };
-struct HttpMsgStruct{
-  HttpHead head_;//http的头内容
+struct HttpRequestMsgStruct{
+  HttpRequestHead head_;//http的头内容
   std::string body_;//http的body内容
   //组合一条http的消息包
   std::string ToString();
+};
+
+struct HttpResponseHead{
+  std::string version_;
+  std::string code_;
+  std::string status;
+  boost::unordered_map<std::string, std::string> attribute_;
+};
+
+struct HttpResponseMsgStruct{
+  HttpResponseHead head_;
+  std::string body_;
+  //返回值表示还需要多少个字节才是完整的包
+  //-1表示无法计算
+  int32_t FromString(const std::string& str_in);
 };
 
 struct ProxyConfig{

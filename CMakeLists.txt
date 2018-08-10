@@ -9,10 +9,10 @@ SET(CMAKE_CXX_COMPILER g++)
 set(CMAKE_CXX_FLAGS "-std=c++14 -Wall")
 #set(CMAKE_CXX_FLAGS "-Wall")
 
+set(CMAKE_SKIP_BUILD_RPATH FALSE)
 add_executable(AsioHttps
   ${DIR_SRC}
 )
-
-target_link_libraries(AsioHttps boost_system)
+target_link_libraries(AsioHttps boost_system libboost_regex.a)
 target_link_libraries(AsioHttps pthread)
 
