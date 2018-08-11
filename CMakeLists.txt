@@ -13,6 +13,6 @@ set(CMAKE_SKIP_BUILD_RPATH FALSE)
 add_executable(AsioHttps
   ${DIR_SRC}
 )
-target_link_libraries(AsioHttps boost_system libboost_regex.a)
+target_link_libraries(AsioHttps boost_system libboost_regex.a ssl crypto dl z)
 target_link_libraries(AsioHttps pthread)
 

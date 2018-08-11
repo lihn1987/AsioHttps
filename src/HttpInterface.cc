@@ -8,24 +8,7 @@ std::string HttpRequestMsgStruct::ToString(){
   head_.attribute_["Content-Length"] = boost::lexical_cast<std::string>(body_.size());
 
   std::string rtn;
-  switch(head_.method_){
-    case HM_GET:
-      {
-        rtn += "GET";
-        break;
-      }
-    case HM_HEAD:
-    case HM_POST:
-    case HM_PUT:
-    case HM_TRACE:
-    case HM_CONNECT:
-    case HM_DELETE:
-    case HM_OPTIONs:
-    default:
-      //error
-      return "";
-      break;
-  }
+  rtn += head_.method_;
   rtn += " "+head_.url_;
   rtn += " "+head_.version+"\r\n";
 
@@ -39,25 +22,23 @@ std::string HttpRequestMsgStruct::ToString(){
 }
 
 int32_t HttpResponseMsgStruct::FromString(const std::string &str_in){
+  str_ori_ = str_in;
   auto finded_iter = boost::algorithm::find_first(str_in, "\r\n\r\n");
   if(finded_iter.empty()){
     //http头还没有收完
     return -1;
   }else{
     std::string str_head(str_in.begin(), finded_iter.begin());
-    body_.assign(finded_iter.end(), str_in.end());
+    std::string str_body(finded_iter.end(), str_in.end());
+
     boost::cmatch what;
     boost::regex regex("^(.*?)\\s+(.*?)\\s+(.*?)$(.*)$");
-    std::cout<<str_head<<std::endl;
     boost::regex_match(str_head.c_str(), what, regex);
     if(what.size() != 5){
       throw "Bad Status line";
       return -1;
     }else{
       //解析状态行
-      std::cout<<"???"<<what[1].str()<<std::endl;
-      std::cout<<"???"<<what[2].str()<<std::endl;
-      std::cout<<"???"<<what[3].str()<<std::endl;
       head_.version_ = boost::algorithm::trim_copy(what[1]);
       head_.code_ = boost::algorithm::trim_copy(what[2]);
       head_.status = boost::algorithm::trim_copy(what[3]);
@@ -80,9 +61,36 @@ int32_t HttpResponseMsgStruct::FromString(const std::string &str_in){
       }
     }
     if(head_.attribute_.find("content-length") == head_.attribute_.end()){
+      //此为采用chunked编码将内容分块输出
+      std::string  str_body_tmp = str_body;
+      regex = boost::regex("^(.*?)\\r\\n(.*)$");
+      body_ = "";
+      while(boost::regex_match(str_body_tmp.c_str(), what, regex)){
+        std::string chuck_len_str = what[1].str();
+        std::istringstream stm(chuck_len_str);
+        uint32_t chuck_len;
+        stm>>std::hex>>chuck_len;
+        if(chuck_len==0){
+          return 0;
+        }else{
+          if(str_body_tmp.size()>chuck_len+2){
+            str_body_tmp = what[2].str();
+            body_.append(str_body_tmp.c_str()+2, chuck_len);
+            str_body_tmp.erase(0, chuck_len+2);
+          }else{
+            break;
+          }
+        }
+      }
+      return -1;
       throw "Did not found content-length";
+
     }
     size_t content_length = boost::lexical_cast<size_t>(head_.attribute_["content-length"]);
-    return content_length-body_.size();
+    size_t remaind_len = content_length-body_.size();
+
+    if(remaind_len == 0)
+      body_.assign(finded_iter.end(), str_in.end());
+    return remaind_len;
   }
 }
