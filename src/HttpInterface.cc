@@ -4,15 +4,52 @@
 #include <boost/lexical_cast.hpp>
 #include <boost/algorithm/string.hpp>
 #include <boost/regex.hpp>
+HttpRequestHead::HttpRequestHead():
+  attribute_(
+    {//这里并没有列出所有的属性，所列的只是常用的
+      //浏览器可接受的MIME类型。
+      std::pair<std::string, std::string>("accept","*/*"),
+      std::pair<std::string, std::string>("content-type", "application/x-www-form-urlencoded"),
+      //Keep-Alive长连
+      //Close短连
+      std::pair<std::string, std::string>("connection","Keep-Alive"),
+      //表示请求消息正文的长度。后面自动填写
+      std::pair<std::string, std::string>("content-length",""),
+      //cookie用于做身份证明
+      std::pair<std::string, std::string>("cookie",""),
+      //初始URL中的主机和端口。
+      std::pair<std::string, std::string>("host","www.hao123.com"),
+      //浏览器类型标识，没有特殊原因直接用默认的这个应该没啥问题
+      std::pair<std::string, std::string>("user-agent","Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Ubuntu Chromium/68.0.3440.75 Chrome/68.0.3440.75 Safari/537.36")
+    }){
+
+}
+
+void HttpRequestHead::SetAttribute(const std::string &name, const std::string &value){
+  attribute_[boost::algorithm::to_lower_copy(name)] = value;
+}
+
+void HttpRequestHead::DeleteAttribute(const std::string &name){
+  attribute_.erase(attribute_[boost::algorithm::to_lower_copy(name)]);
+}
+
+std::string HttpRequestHead::GetAttribute(const std::string &name){
+  return attribute_[boost::algorithm::to_lower_copy(name)];
+}
+
+boost::unordered_map<std::string, std::string> HttpRequestHead::GetAllAttribute(){
+  return attribute_;
+}
+
 std::string HttpRequestMsgStruct::ToString(){
-  head_.attribute_["Content-Length"] = boost::lexical_cast<std::string>(body_.size());
+  head_.SetAttribute("Content-Length", boost::lexical_cast<std::string>(body_.size()));
 
   std::string rtn;
   rtn += head_.method_;
   rtn += " "+head_.url_;
   rtn += " "+head_.version+"\r\n";
 
-  for(auto item:head_.attribute_){
+  for(auto item:head_.GetAllAttribute()){
     if(item.second !=""){
       rtn += item.first+": "+item.second+"\r\n";
     }
@@ -94,3 +131,6 @@ int32_t HttpResponseMsgStruct::FromString(const std::string &str_in){
     return remaind_len;
   }
 }
+
+
+

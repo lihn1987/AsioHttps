@@ -3,7 +3,7 @@
 #include <boost/bind.hpp>
 #include <boost/algorithm/string.hpp>
 #include <boost/lexical_cast.hpp>
-
+#include <boost/regex.hpp>
 AsioHttpsSocket::AsioHttpsSocket(boost::asio::io_service& ios, boost::asio::ssl::context& ctx):
   ios_(ios),socket_(ios),
   socket_ssl_(ios, ctx),
@@ -13,6 +13,26 @@ AsioHttpsSocket::AsioHttpsSocket(boost::asio::io_service& ios, boost::asio::ssl:
 AsioHttpsSocket::~AsioHttpsSocket()
 {
 
+}
+
+bool AsioHttpsSocket::Process(const std::string &url, ResponseCallback response){
+  boost::cmatch what;
+  boost::regex regex("^(.+)://(.+)$");
+  if(boost::regex_match(url.c_str(), what, regex)){
+    std::shared_ptr<AsioHttpsRequest> request = std::make_shared<AsioHttpsRequest>();
+    request->head_.SetAttribute("host", what[2].str());
+    std::string proto = what[1].str();
+    if(proto == "http"){
+      request->config_.ssl_ = false;
+    }else if(proto == "https") {
+      request->config_.ssl_ = true;
+    }else{
+      return false;
+    }
+    return Process(request, response);
+  }else{
+    return false;
+  }
 }
 
 bool AsioHttpsSocket::Process(std::shared_ptr<AsioHttpsRequest> request, ResponseCallback response){
@@ -25,21 +45,6 @@ bool AsioHttpsSocket::Process(std::shared_ptr<AsioHttpsRequest> request, Respons
 }
 
 void AsioHttpsSocket::ConnectToHost(const std::string& host_url){
-  /*std::lock_guard<std::recursive_mutex> lk(process_list_mutex_);
-  std::vector<std::string> splite_string;
-  boost::algorithm::split(splite_string, host_url, boost::algorithm::is_any_of(":"));
-  std::string addr,port;
-  if(splite_string.size() == 1){
-    addr = splite_string[0];
-    port = "80";
-  }else if(splite_string.size() == 2){
-    addr = splite_string[0];
-    port = splite_string[1];
-  }else{
-    process_list_.pop_front();
-    socket_.close();
-    return;
-  }*/
   std::string proto;
   if(ssl_){
     proto = "https";
@@ -84,7 +89,7 @@ void AsioHttpsSocket::OnConnect(const boost::system::error_code &err){
       socket_ssl_.set_verify_mode(boost::asio::ssl::verify_peer);
 
       //socket_ssl_.set_verify_callback(verify_callback);
-      socket_ssl_.set_verify_callback(boost::asio::ssl::rfc2818_verification(process_list_.front().first->head_.attribute_["Host"]));
+      socket_ssl_.set_verify_callback(boost::asio::ssl::rfc2818_verification(process_list_.front().first->head_.GetAttribute("Host")));
       socket_ssl_.async_handshake(boost::asio::ssl::stream_base::client, boost::bind(&AsioHttpsSocket::OnHandShake, this, _1));
     }else{
       socket_.async_send(boost::asio::buffer(send_buf_), boost::bind(&AsioHttpsSocket::OnSend, this, _1, _2));
@@ -152,6 +157,7 @@ void AsioHttpsSocket::OnRead(const boost::system::error_code &err, std::size_t s
       std::lock_guard<std::recursive_mutex> lk(process_list_mutex_);
       std::pair<std::shared_ptr<AsioHttpsRequest>, ResponseCallback> process_pair =  process_list_.front();
       process_list_.pop_front();
+      CloseSocket();
       process_pair.second(process_pair.first, msg);
       DoProcess();
     }else{
@@ -163,10 +169,18 @@ void AsioHttpsSocket::OnRead(const boost::system::error_code &err, std::size_t s
 void AsioHttpsSocket::DoProcess(){
   std::lock_guard<std::recursive_mutex> lk(process_list_mutex_);
   if(!process_list_.empty()){
+
     std::pair<std::shared_ptr<AsioHttpsRequest> , ResponseCallback> pair = process_list_.front();
-    if(pair.first->head_.attribute_["Host"] != host_){
+    if(pair.first->head_.GetAttribute("Host") != host_ ||
+       pair.first->config_.ssl_ != ssl_ ||
+       pair.first->config_.proxy_config_ != proxy_config_)
+    {//要连接的对象和原来的不相等了
+      //进行配置
+      ssl_ = pair.first->config_.ssl_;
+      proxy_config_ = pair.first->config_.proxy_config_;
+
       socket_.close();
-      ConnectToHost(pair.first->head_.attribute_["Host"]);
+      ConnectToHost(pair.first->head_.GetAttribute("Host"));
     }else{
       //相同的地址可以复用socket,直接跳过连接部分
       OnConnect(boost::system::error_code());
@@ -185,9 +199,22 @@ void AsioHttpsSocket::ErrorProcess(const std::string &str_err){
   }else{
     msg->error_ = "unknow error";
   }
+  CloseSocket();
   process_pair.second(process_pair.first, msg);
   //进行下一个process
   DoProcess();
+}
+
+void AsioHttpsSocket::CloseSocket(){
+  try{
+    if(ssl_){
+      socket_ssl_.shutdown();
+    }else{
+      socket_.close();
+    }
+  }catch(...){
+
+  }
 }
 
 
