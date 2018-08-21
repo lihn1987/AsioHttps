@@ -30,6 +30,8 @@ public:
   //  https://www.github.com
   bool Process(const std::string& url, ResponseCallback response);
 
+  bool Process(const std::string& url, const ProxyConfig &config, ResponseCallback response);
+
   bool Process(std::shared_ptr<AsioHttpsRequest> request, ResponseCallback response);
 private:
   void ConnectToHost(const std::string& host_url);
@@ -51,6 +53,8 @@ private:
   std::list<std::pair<std::shared_ptr<AsioHttpsRequest>, ResponseCallback>> process_list_;
   ProxyConfig proxy_config_;
   bool ssl_;
+  bool use_proxy_;
+  ProxyConfig proxy_;
   std::string host_;
   boost::asio::ip::tcp::socket socket_;
   boost::asio::ssl::stream<boost::asio::ip::tcp::socket> socket_ssl_;

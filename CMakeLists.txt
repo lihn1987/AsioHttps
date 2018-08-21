@@ -13,6 +13,10 @@ set(CMAKE_SKIP_BUILD_RPATH FALSE)
 add_executable(AsioHttps
   ${DIR_SRC}
 )
-target_link_libraries(AsioHttps boost_system libboost_regex.a ssl crypto dl z)
+#SET(CMAKE_EXE_LINKER_FLAGS  "-lcrypto -lssl")
+#set(CMAKE_CXX_LINK_EXECUTABLE "-lssl")
+#这里由于另一个项目要用到ssl1.1.0的版本，而当前项目又需要用到ssl1.0的版本，由于没法设置版本，所以这里将就下
+target_link_libraries(AsioHttps boost_system libboost_regex.a ssl10 crypto10 dl z)
+#target_link_libraries(AsioHttps boost_system libboost_regex.a ssl crypto dl z)
 target_link_libraries(AsioHttps pthread)
 

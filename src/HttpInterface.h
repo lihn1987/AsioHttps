@@ -31,12 +31,13 @@ struct ProxyConfig{
     return !(*this == it);
   }
   std::string url_;
-  uint16_t port_;
+  uint16_t port_ = 0;
 };
 
 struct HttpRequestConfig{
-  ProxyConfig proxy_config_;
-  bool ssl_;
+  bool ssl_ = false;
+  bool use_proxy_ = false;
+  ProxyConfig proxy_;
 };
 
 struct HttpRequestMsgStruct{
