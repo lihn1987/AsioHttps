@@ -124,7 +124,7 @@ int32_t HttpResponseMsgStruct::FromString(const std::string &str_in){
 
     }
     size_t content_length = boost::lexical_cast<size_t>(head_.attribute_["content-length"]);
-    size_t remaind_len = content_length-body_.size();
+    size_t remaind_len = content_length-str_body.size();
 
     if(remaind_len == 0)
       body_.assign(finded_iter.end(), str_in.end());

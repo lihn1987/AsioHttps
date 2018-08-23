@@ -76,76 +76,94 @@ bool AsioHttpsSocket::Process(std::shared_ptr<AsioHttpsRequest> request, Respons
 
 void AsioHttpsSocket::ConnectToHost(const std::string& host_url){
   if(use_proxy_){
-    //socket_ssl_.set_verify_mode(boost::asio::ssl::verify_peer);
-    //socket_ssl_.set_verify_callback(boost::asio::ssl::rfc2818_verification(process_list_.front().first->head_.GetAttribute("host")));
-      //链接socks5代理
-      boost::system::error_code ec;
-      boost::asio::ip::tcp::endpoint end_point(boost::asio::ip::address::from_string(proxy_.url_), proxy_.port_);
+    //链接socks5代理
+    boost::system::error_code ec;
+    boost::asio::ip::tcp::endpoint end_point(boost::asio::ip::address::from_string(proxy_.url_), proxy_.port_);
+    if(ssl_){
       socket_ssl_.lowest_layer().connect(end_point,
-                                          ec);
-      if(ec){
-        ErrorProcess("proxy error!");
-        return;
-      }
+                                        ec);
+    }else{
+      socket_.connect(end_point, ec);
+    }
+    if(ec){
+      ErrorProcess("proxy error!");
+      return;
+    }
 
-      unsigned char buf[1024] = {0x05, 0x01, 0x00};
+    unsigned char buf[1024] = {0x05, 0x01, 0x00};
+    if(ssl_){
       boost::asio::write(socket_ssl_.next_layer(), boost::asio::buffer(buf, 3), boost::asio::transfer_all(), ec);
-      if(ec){
-        ErrorProcess("proxy error!");
-        return;
-      }
+    }else{
+      boost::asio::write(socket_, boost::asio::buffer(buf, 3), boost::asio::transfer_all(), ec);
+    }
+    if(ec){
+      ErrorProcess("proxy error!");
+      return;
+    }
 
+    if(ssl_){
       boost::asio::read(socket_ssl_.next_layer(), boost::asio::buffer(buf, 2), boost::asio::transfer_exactly(2), ec);
-      if(ec){
-        ErrorProcess("proxy error!");
-        return;
-      }
-      if(buf[0] != 0x05 || buf[1] != 0x00){
-        ErrorProcess("proxy error!");
-        return;
-      }
-      //开始链接
-      int idx = 0;
-      buf[idx++] = 0x05;
-      buf[idx++] = 0x01;
-      buf[idx++] = 0x00;
-      buf[idx++] = 0x03;
+    }else{
+      boost::asio::read(socket_, boost::asio::buffer(buf, 2), boost::asio::transfer_exactly(2), ec);
+    }
+    if(ec){
+      ErrorProcess("proxy error!");
+      return;
+    }
+    if(buf[0] != 0x05 || buf[1] != 0x00){
+      ErrorProcess("proxy error!");
+      return;
+    }
+    //开始链接
+    int idx = 0;
+    buf[idx++] = 0x05;
+    buf[idx++] = 0x01;
+    buf[idx++] = 0x00;
+    buf[idx++] = 0x03;
 
-      std::string url = process_list_.front().first->head_.GetAttribute("host");
-      buf[idx++] = url.size();
-      memcpy(&buf[idx], url.data(), url.size());
-      idx += url.size();
-      uint16_t port = process_list_.front().first->config_.ssl_?443:80;
-      //memcpy(&buf[idx], (char*)&port, sizeof(port));
-      buf[idx++]=((char*)&port)[1];
-      buf[idx++]=((char*)&port)[0];
+    std::string url = process_list_.front().first->head_.GetAttribute("host");
+    buf[idx++] = url.size();
+    memcpy(&buf[idx], url.data(), url.size());
+    idx += url.size();
+    uint16_t port = process_list_.front().first->config_.ssl_?443:80;
+    //memcpy(&buf[idx], (char*)&port, sizeof(port));
+    buf[idx++]=((char*)&port)[1];
+    buf[idx++]=((char*)&port)[0];
+    if(ssl_){
       boost::asio::write(socket_ssl_.next_layer(), boost::asio::buffer(buf, idx), boost::asio::transfer_all(), ec);
-      if(ec){
-        ErrorProcess("proxy error!");
-        return;
-      }
+    }else{
+      boost::asio::write(socket_, boost::asio::buffer(buf, idx), boost::asio::transfer_all(), ec);
+    }
+    if(ec){
+      ErrorProcess("proxy error!");
+      return;
+    }
 
+    if(ssl_){
       boost::asio::read(socket_ssl_.next_layer(), boost::asio::buffer(buf, 10), boost::asio::transfer_exactly(10), ec);
-      if(ec){
-        ErrorProcess("proxy error!");
-        return;
-      }
-      int version = buf[0];
-      int response = buf[1];
-      if(version != 5){
-        ErrorProcess("proxy error!");
-        return;
-      }
-      if (response != 0){
-        ErrorProcess("proxy error!");
-        return;
-      }
-      OnConnect(boost::system::error_code());
+    }else{
+      boost::asio::read(socket_, boost::asio::buffer(buf, 10), boost::asio::transfer_exactly(10), ec);
+    }
+    if(ec){
+      ErrorProcess("proxy error!");
+      return;
+    }
+    int version = buf[0];
+    int response = buf[1];
+    if(version != 5){
+      ErrorProcess("proxy error!");
+      return;
+    }
+    if (response != 0){
+      ErrorProcess("proxy error!");
+      return;
+    }
+    OnConnect(boost::system::error_code());
+    return;
   }
   std::string proto;
   if(ssl_){
     proto = "https";
-    return ;
   }else{
     proto = "http";
   }
@@ -241,14 +259,10 @@ void AsioHttpsSocket::OnRead(const boost::system::error_code &err, std::size_t s
   if(err){
     ErrorProcess(err.message());
   }else{
+
     read_buf_tmp_[size] = 0;
     //std::cout<<"*************"<<read_buf_tmp_<<"**********"<<std::endl;
     read_buf_.insert( read_buf_.end(), (char*)read_buf_tmp_, (char*)read_buf_tmp_ + size);
-    {
-      std::string tmp;
-      //tmp.insert( read_buf_.end(), (char*)read_buf_tmp_, (char*)read_buf_tmp_ + size);
-      //std::cout<<"received:"<<read_buf_tmp_;
-    }
 
     std::shared_ptr<HttpResponseMsgStruct> msg = std::make_shared<HttpResponseMsgStruct>();
     int32_t tmp_len = msg->FromString(read_buf_);
@@ -283,7 +297,6 @@ void AsioHttpsSocket::OnRead(const boost::system::error_code &err, std::size_t s
 void AsioHttpsSocket::DoProcess(){
   std::lock_guard<std::recursive_mutex> lk(process_list_mutex_);
   if(!process_list_.empty()){
-
     std::pair<std::shared_ptr<AsioHttpsRequest> , ResponseCallback> pair = process_list_.front();
     if(pair.first->head_.GetAttribute("host") != host_ ||
        pair.first->config_.ssl_ != ssl_ ||
