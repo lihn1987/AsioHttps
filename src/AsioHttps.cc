@@ -23,8 +23,8 @@ bool AsioHttpsSocket::Process(const std::string &url, ResponseCallback response)
     request->head_.SetAttribute("host", what[2].str());
     request->head_.url_ = what[3].str();
     std::string proto = what[1].str();
-    std::cout<<"host:"<<request->head_.GetAttribute("host")<<std::endl;
-    std::cout<<"url:"<<request->head_.url_<<std::endl;
+    //std::cout<<"host:"<<request->head_.GetAttribute("host")<<std::endl;
+    //std::cout<<"url:"<<request->head_.url_<<std::endl;
 
     if(proto == "http"){
       request->config_.ssl_ = false;
@@ -47,8 +47,8 @@ bool AsioHttpsSocket::Process(const std::string &url, const ProxyConfig &config,
     request->head_.SetAttribute("host", what[2].str());
     request->head_.url_ = what[3].str();
     std::string proto = what[1].str();
-    std::cout<<"host:"<<request->head_.GetAttribute("host")<<std::endl;
-    std::cout<<"url:"<<request->head_.url_<<std::endl;
+    //std::cout<<"host:"<<request->head_.GetAttribute("host")<<std::endl;
+    //std::cout<<"url:"<<request->head_.url_<<std::endl;
 
     if(proto == "http"){
       request->config_.ssl_ = false;
@@ -175,7 +175,7 @@ void AsioHttpsSocket::OnResolveAddr(const boost::system::error_code &err, boost:
   if(err){
     ErrorProcess(err.message());
   }else{
-    std::cout<<"ip:"<<rit->endpoint().address()<<std::endl;
+    //std::cout<<"ip:"<<rit->endpoint().address()<<std::endl;
     if(ssl_){
 
       boost::asio::async_connect(socket_ssl_.lowest_layer(), rit,
