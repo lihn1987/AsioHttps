@@ -8,8 +8,8 @@ aux_source_directory(${CUR_DIR}/src DIR_SRC)
 SET(CMAKE_CXX_COMPILER g++)
 set(CMAKE_CXX_FLAGS "-std=c++14 -Wall")
 #set(CMAKE_CXX_FLAGS "-Wall")
-
 set(CMAKE_SKIP_BUILD_RPATH FALSE)
+
 add_executable(AsioHttps
   ./src/main.cc
 )

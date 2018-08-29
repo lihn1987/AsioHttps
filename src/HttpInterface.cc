@@ -20,7 +20,7 @@ HttpRequestHead::HttpRequestHead():
       //初始URL中的主机和端口。
       std::pair<std::string, std::string>("host","www.hao123.com"),
       //浏览器类型标识，没有特殊原因直接用默认的这个应该没啥问题
-      std::pair<std::string, std::string>("user-agent","Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Ubuntu Chromium/68.0.3440.75 Chrome/68.0.3440.75 Safari/537.36")
+      std::pair<std::string, std::string>("user-agent","Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/39.0.2171.71 Safari/537.36")
     }){
 
 }
@@ -76,9 +76,9 @@ int32_t HttpResponseMsgStruct::FromString(const std::string &str_in){
       return -1;
     }else{
       //解析状态行
-      head_.version_ = boost::algorithm::trim_copy(what[1]);
-      head_.code_ = boost::algorithm::trim_copy(what[2]);
-      head_.status = boost::algorithm::trim_copy(what[3]);
+      head_.version_ = boost::algorithm::trim_copy(what[1].str());
+      head_.code_ = boost::algorithm::trim_copy(what[2].str());
+      head_.status = boost::algorithm::trim_copy(what[3].str());
     }
     regex = boost::regex("^\\s*(.*?)\\s*:\\s*(.*?)\\s*$\\s*(.*)\\s*$");
     str_head = boost::algorithm::trim_copy(what[4].str());
@@ -112,7 +112,7 @@ int32_t HttpResponseMsgStruct::FromString(const std::string &str_in){
         }else{
           if(str_body_tmp.size()>chuck_len+2){
             str_body_tmp = what[2].str();
-            body_.append(str_body_tmp.c_str()+2, chuck_len);
+            body_.append(str_body_tmp.c_str(), chuck_len);
             str_body_tmp.erase(0, chuck_len+2);
           }else{
             break;

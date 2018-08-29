@@ -33,6 +33,7 @@ public:
   bool Process(const std::string& url, const ProxyConfig &config, ResponseCallback response);
 
   bool Process(std::shared_ptr<AsioHttpsRequest> request, ResponseCallback response);
+  size_t GetProcessSize(){return process_list_.size();}
 private:
   void ConnectToHost(const std::string& host_url);
   void OnResolveAddr(const boost::system::error_code& err, boost::asio::ip::tcp::resolver::iterator rit);
@@ -63,6 +64,7 @@ private:
   const static size_t MAX_BUF_SIZE=1024*1024;
   char read_buf_tmp_[MAX_BUF_SIZE];
   std::string read_buf_;
+  bool last_error_ = true;
 };
 
 class AsioHttps{

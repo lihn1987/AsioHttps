@@ -86,7 +86,9 @@ void AsioHttpsSocket::ConnectToHost(const std::string& host_url){
       socket_.connect(end_point, ec);
     }
     if(ec){
-      ErrorProcess("proxy error!");
+      std::thread trd(boost::bind(&AsioHttpsSocket::ErrorProcess, this, ec.message()));
+      trd.detach();
+
       return;
     }
 
@@ -97,7 +99,8 @@ void AsioHttpsSocket::ConnectToHost(const std::string& host_url){
       boost::asio::write(socket_, boost::asio::buffer(buf, 3), boost::asio::transfer_all(), ec);
     }
     if(ec){
-      ErrorProcess("proxy error!");
+      std::thread trd(boost::bind(&AsioHttpsSocket::ErrorProcess, this, ec.message()));
+      trd.detach();
       return;
     }
 
@@ -107,11 +110,13 @@ void AsioHttpsSocket::ConnectToHost(const std::string& host_url){
       boost::asio::read(socket_, boost::asio::buffer(buf, 2), boost::asio::transfer_exactly(2), ec);
     }
     if(ec){
-      ErrorProcess("proxy error!");
+      std::thread trd(boost::bind(&AsioHttpsSocket::ErrorProcess, this, ec.message()));
+      trd.detach();
       return;
     }
     if(buf[0] != 0x05 || buf[1] != 0x00){
-      ErrorProcess("proxy error!");
+      std::thread trd(boost::bind(&AsioHttpsSocket::ErrorProcess, this, ec.message()));
+      trd.detach();
       return;
     }
     //开始链接
@@ -135,7 +140,8 @@ void AsioHttpsSocket::ConnectToHost(const std::string& host_url){
       boost::asio::write(socket_, boost::asio::buffer(buf, idx), boost::asio::transfer_all(), ec);
     }
     if(ec){
-      ErrorProcess("proxy error!");
+      std::thread trd(boost::bind(&AsioHttpsSocket::ErrorProcess, this, ec.message()));
+      trd.detach();
       return;
     }
 
@@ -145,17 +151,20 @@ void AsioHttpsSocket::ConnectToHost(const std::string& host_url){
       boost::asio::read(socket_, boost::asio::buffer(buf, 10), boost::asio::transfer_exactly(10), ec);
     }
     if(ec){
-      ErrorProcess("proxy error!");
+      std::thread trd(boost::bind(&AsioHttpsSocket::ErrorProcess, this, ec.message()));
+      trd.detach();
       return;
     }
     int version = buf[0];
     int response = buf[1];
     if(version != 5){
-      ErrorProcess("proxy error!");
+      std::thread trd(boost::bind(&AsioHttpsSocket::ErrorProcess, this, ec.message()));
+      trd.detach();
       return;
     }
     if (response != 0){
-      ErrorProcess("proxy error!");
+      std::thread trd(boost::bind(&AsioHttpsSocket::ErrorProcess, this, ec.message()));
+      trd.detach();
       return;
     }
     OnConnect(boost::system::error_code());
@@ -177,10 +186,8 @@ void AsioHttpsSocket::OnResolveAddr(const boost::system::error_code &err, boost:
   }else{
     //std::cout<<"ip:"<<rit->endpoint().address()<<std::endl;
     if(ssl_){
-
       boost::asio::async_connect(socket_ssl_.lowest_layer(), rit,
               boost::bind(&AsioHttpsSocket::OnConnect, this, _1));
-
     }else{
       ConnectToIP(rit->endpoint());
     }
@@ -204,16 +211,6 @@ void AsioHttpsSocket::OnConnect(const boost::system::error_code &err){
   }else{
     send_buf_ = process_list_.front().first->ToString();
     if(ssl_){
-      /*if(use_proxy_){
-        //OnHandShake(boost::system::error_code());
-        boost::system::error_code ec;
-        socket_ssl_.handshake(boost::asio::ssl::stream_base::client, ec);
-        if(ec){
-          std::cout<<ec.message()<<std::endl;
-        }
-        return;
-      }*/
-
       socket_ssl_.set_verify_mode(boost::asio::ssl::verify_none);
       socket_ssl_.set_verify_callback(boost::asio::ssl::rfc2818_verification(process_list_.front().first->head_.GetAttribute("host")));
       socket_ssl_.async_handshake(boost::asio::ssl::stream_base::client, boost::bind(&AsioHttpsSocket::OnHandShake, this, _1));
@@ -246,6 +243,7 @@ void AsioHttpsSocket::OnSend(const boost::system::error_code &err, std::size_t s
     }else{
       //发送完成，开始接收
       read_buf_.clear();
+      send_buf_.clear();
       if(ssl_){
         socket_ssl_.async_read_some(boost::asio::buffer(read_buf_tmp_, MAX_BUF_SIZE), boost::bind(&AsioHttpsSocket::OnRead, this, _1, _2));
       }else{
@@ -284,9 +282,8 @@ void AsioHttpsSocket::OnRead(const boost::system::error_code &err, std::size_t s
       //接收完成
       std::lock_guard<std::recursive_mutex> lk(process_list_mutex_);
       std::pair<std::shared_ptr<AsioHttpsRequest>, ResponseCallback> process_pair =  process_list_.front();
-      process_list_.pop_front();
-      CloseSocket();
       process_pair.second(process_pair.first, msg);
+      process_list_.pop_front();
       DoProcess();
     }else{
       assert(0);
@@ -297,26 +294,34 @@ void AsioHttpsSocket::OnRead(const boost::system::error_code &err, std::size_t s
 void AsioHttpsSocket::DoProcess(){
   std::lock_guard<std::recursive_mutex> lk(process_list_mutex_);
   if(!process_list_.empty()){
+
     std::pair<std::shared_ptr<AsioHttpsRequest> , ResponseCallback> pair = process_list_.front();
     if(pair.first->head_.GetAttribute("host") != host_ ||
        pair.first->config_.ssl_ != ssl_ ||
        pair.first->config_.proxy_ != proxy_ ||
-       pair.first->config_.use_proxy_ != use_proxy_)
-    {//要连接的对象和原来的不相等了
+       pair.first->config_.use_proxy_ != use_proxy_ || last_error_)
+    {///要连接的对象和原来的不相等了
       //进行配置
+      read_buf_.clear();
+      send_buf_.clear();
+      last_error_ = false;
       host_ = pair.first->head_.GetAttribute("host");
       ssl_ = pair.first->config_.ssl_;
       use_proxy_ = pair.first->config_.use_proxy_;
       proxy_ = pair.first->config_.proxy_;
-      boost::system::error_code ec;
-      socket_.close(ec);
-      socket_ssl_.shutdown(ec);
 
+      CloseSocket();
       ConnectToHost(pair.first->head_.GetAttribute("host"));
 
     }else{
       //相同的地址可以复用socket,直接跳过连接部分
-      OnConnect(boost::system::error_code());
+      last_error_ = false;
+      read_buf_.clear();
+      if(!ssl_){
+        OnConnect(boost::system::error_code());
+      }else{
+        OnHandShake(boost::system::error_code());
+      }
     }
   }
 }
@@ -324,8 +329,9 @@ void AsioHttpsSocket::DoProcess(){
 void AsioHttpsSocket::ErrorProcess(const std::string &str_err){
   std::lock_guard<std::recursive_mutex> lk(process_list_mutex_);
   //接收失败，调用函数返回
+  last_error_ = true;
   std::pair<std::shared_ptr<AsioHttpsRequest>, ResponseCallback> process_pair =  process_list_.front();
-  process_list_.pop_front();
+  //process_list_.pop_front();
   std::shared_ptr<HttpResponseMsgStruct> msg = std::make_shared<HttpResponseMsgStruct>();
   if(str_err != ""){
     msg->error_ = str_err;
@@ -334,17 +340,20 @@ void AsioHttpsSocket::ErrorProcess(const std::string &str_err){
   }
   CloseSocket();
   process_pair.second(process_pair.first, msg);
+  process_list_.pop_front();
   //进行下一个process
   DoProcess();
 }
 
 void AsioHttpsSocket::CloseSocket(){
   try{
-    if(ssl_){
-      socket_ssl_.shutdown();
-    }else{
-      socket_.close();
-    }
+    boost::system::error_code ec;
+    socket_.close(ec);
+    socket_ssl_.shutdown(ec);
+    socket_ssl_.lowest_layer().shutdown(boost::asio::socket_base::shutdown_both,ec);
+    socket_ssl_.lowest_layer().close(ec);
+    socket_ssl_.next_layer().shutdown(boost::asio::socket_base::shutdown_both,ec);
+    socket_ssl_.next_layer().close(ec);
   }catch(...){
 
   }
