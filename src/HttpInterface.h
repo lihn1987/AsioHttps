@@ -14,6 +14,7 @@ public:
   void DeleteAttribute(const std::string& name);
   std::string GetAttribute(const std::string& name);
   boost::unordered_map<std::string, std::string> GetAllAttribute();
+  void DeleteAllAttribute();
 private:
   /*
     不能直接操作attribute，而需要通过接口
@@ -35,6 +36,7 @@ struct ProxyConfig{
 };
 
 struct HttpRequestConfig{
+  bool websocket_ = false;
   bool ssl_ = false;
   bool use_proxy_ = false;
   ProxyConfig proxy_;

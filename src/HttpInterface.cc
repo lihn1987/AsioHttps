@@ -41,6 +41,10 @@ boost::unordered_map<std::string, std::string> HttpRequestHead::GetAllAttribute(
   return attribute_;
 }
 
+void HttpRequestHead::DeleteAllAttribute(){
+  attribute_.clear();
+}
+
 std::string HttpRequestMsgStruct::ToString(){
   head_.SetAttribute("Content-Length", boost::lexical_cast<std::string>(body_.size()));
 
@@ -55,6 +59,7 @@ std::string HttpRequestMsgStruct::ToString(){
     }
   }
   rtn += "\r\n";
+  rtn += body_;
   return rtn;
 }
 
@@ -98,6 +103,39 @@ int32_t HttpResponseMsgStruct::FromString(const std::string &str_in){
       }
     }
     if(head_.attribute_.find("content-length") == head_.attribute_.end()){
+      const char* p_char = str_body.data();
+      const char* p_char_end = &str_body.data()[str_body.length()];
+      body_ = "";
+      while(p_char_end-p_char > 3){
+        const char* p_char_tmp = p_char+2;
+        uint32_t chuck_len;
+        while(p_char_tmp != p_char_end){
+          if(*p_char_tmp=='\n' && *(p_char_tmp-1) == '\r'){
+            std::string chuck_len_str(p_char, p_char_tmp-1);
+            std::istringstream stm(chuck_len_str);
+            stm>>std::hex>>chuck_len;
+            break;
+          }
+          p_char_tmp++;
+        }
+        p_char_tmp++;
+
+        if(str_body.size() > chuck_len){
+          int mmm;
+          mmm = 1;
+          mmm = 2;
+        }
+        if(p_char_tmp+chuck_len+2 <= p_char_end){
+          body_.append(p_char_tmp, chuck_len);
+        }
+        p_char=p_char_tmp+chuck_len+2;
+        if(chuck_len == 0 && p_char == p_char_end){
+          //std::cout<<body_<<std::endl;
+          return 0;
+        }
+      }
+      return -1;
+
       //此为采用chunked编码将内容分块输出
       std::string  str_body_tmp = str_body;
       regex = boost::regex("^(.*?)\\r\\n(.*)$");
@@ -120,8 +158,6 @@ int32_t HttpResponseMsgStruct::FromString(const std::string &str_in){
         }
       }
       return -1;
-      throw "Did not found content-length";
-
     }
     size_t content_length = boost::lexical_cast<size_t>(head_.attribute_["content-length"]);
     size_t remaind_len = content_length-str_body.size();

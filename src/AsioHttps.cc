@@ -67,6 +67,9 @@ bool AsioHttpsSocket::Process(const std::string &url, const ProxyConfig &config,
 
 bool AsioHttpsSocket::Process(std::shared_ptr<AsioHttpsRequest> request, ResponseCallback response){
   std::lock_guard<std::recursive_mutex> lk(process_list_mutex_);
+  if(request->config_.websocket_){
+
+  }
   process_list_.push_back(std::make_pair(request, response));
   if(process_list_.size() == 1){//之前的都已处理
     DoProcess();
@@ -225,6 +228,7 @@ void AsioHttpsSocket::OnHandShake(const boost::system::error_code &err){
     ErrorProcess(err.message());
   }else{
     send_buf_ = process_list_.front().first->ToString();
+    std::cout<<send_buf_<<std::endl;
     socket_ssl_.async_write_some(boost::asio::buffer(send_buf_), boost::bind(&AsioHttpsSocket::OnSend, this, _1, _2));
   }
 }
@@ -238,6 +242,7 @@ void AsioHttpsSocket::OnSend(const boost::system::error_code &err, std::size_t s
       if(ssl_){
         socket_ssl_.async_write_some(boost::asio::buffer(send_buf_), boost::bind(&AsioHttpsSocket::OnSend, this, _1, _2));
       }else{
+
         socket_.async_send(boost::asio::buffer(send_buf_), boost::bind(&AsioHttpsSocket::OnSend, this, _1, _2));
       }
     }else{
@@ -259,7 +264,7 @@ void AsioHttpsSocket::OnRead(const boost::system::error_code &err, std::size_t s
   }else{
 
     read_buf_tmp_[size] = 0;
-    //std::cout<<"*************"<<read_buf_tmp_<<"**********"<<std::endl;
+    std::cout<<"*************"<<read_buf_tmp_<<"**********"<<std::endl;
     read_buf_.insert( read_buf_.end(), (char*)read_buf_tmp_, (char*)read_buf_tmp_ + size);
 
     std::shared_ptr<HttpResponseMsgStruct> msg = std::make_shared<HttpResponseMsgStruct>();

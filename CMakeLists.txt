@@ -23,5 +23,5 @@ target_link_libraries(AsioHttps AsioHttpsLib)
 ADD_LIBRARY(AsioHttpsLib STATIC
              ./src/AsioHttps.cc
              ./src/HttpInterface.cc)
-target_link_libraries(AsioHttpsLib boost_system libboost_regex.a ssl10 crypto10 dl z)
+target_link_libraries(AsioHttpsLib boost_system libboost_regex.a ssl crypto dl z)
 target_link_libraries(AsioHttpsLib pthread)
