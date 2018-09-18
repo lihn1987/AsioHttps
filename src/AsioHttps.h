@@ -34,6 +34,8 @@ public:
 
   bool Process(std::shared_ptr<AsioHttpsRequest> request, ResponseCallback response);
   size_t GetProcessSize(){return process_list_.size();}
+  //只在websocket的时候使用
+  bool SocketSend(const std::string& str_send);
 private:
   void ConnectToHost(const std::string& host_url);
   void OnResolveAddr(const boost::system::error_code& err, boost::asio::ip::tcp::resolver::iterator rit);
@@ -55,6 +57,7 @@ private:
   ProxyConfig proxy_config_;
   bool ssl_;
   bool use_proxy_;
+  bool websocekt_;
   ProxyConfig proxy_;
   std::string host_;
   boost::asio::ip::tcp::socket socket_;
@@ -65,6 +68,7 @@ private:
   char read_buf_tmp_[MAX_BUF_SIZE];
   std::string read_buf_;
   bool last_error_ = true;
+  bool websocket_head_ = false;
 };
 
 class AsioHttps{

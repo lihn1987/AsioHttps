@@ -63,7 +63,7 @@ std::string HttpRequestMsgStruct::ToString(){
   return rtn;
 }
 
-int32_t HttpResponseMsgStruct::FromString(const std::string &str_in){
+int32_t HttpResponseMsgStruct::FromString(const std::string &str_in, bool webservice){
   str_ori_ = str_in;
   auto finded_iter = boost::algorithm::find_first(str_in, "\r\n\r\n");
   if(finded_iter.empty()){

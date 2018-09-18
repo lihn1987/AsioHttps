@@ -64,6 +64,6 @@ struct HttpResponseMsgStruct{
   std::string error_;//接收到该信息是，若error_为空表示消息正确，否则表示通讯过程中发生了失败
   //返回值表示还需要多少个字节才是完整的包
   //-1表示无法计算
-  int32_t FromString(const std::string& str_in);
+  int32_t FromString(const std::string& str_in, bool webservice = false);
 };
 #endif

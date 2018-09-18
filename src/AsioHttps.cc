@@ -4,6 +4,7 @@
 #include <boost/algorithm/string.hpp>
 #include <boost/lexical_cast.hpp>
 #include <boost/regex.hpp>
+#include <boost/thread.hpp>
 AsioHttpsSocket::AsioHttpsSocket(boost::asio::io_service& ios, boost::asio::ssl::context& ctx):
   ios_(ios),socket_(ios),
   socket_ssl_(ios, ctx),
@@ -68,13 +69,48 @@ bool AsioHttpsSocket::Process(const std::string &url, const ProxyConfig &config,
 bool AsioHttpsSocket::Process(std::shared_ptr<AsioHttpsRequest> request, ResponseCallback response){
   std::lock_guard<std::recursive_mutex> lk(process_list_mutex_);
   if(request->config_.websocket_){
-
+    websocekt_ = true;
   }
   process_list_.push_back(std::make_pair(request, response));
   if(process_list_.size() == 1){//之前的都已处理
     DoProcess();
   }
   return true;
+}
+
+bool AsioHttpsSocket::SocketSend(const std::string &str_send)
+{
+  if(ssl_){
+    boost::system::error_code ec;
+    std::string send_buf = str_send;
+    while(send_buf.size()){
+      size_t size = socket_ssl_.write_some(boost::asio::buffer(send_buf), ec);
+      if(ec){
+        std::cout<<ec.message()<<std::endl;
+        return false;
+      }
+      send_buf.erase(0, size);
+      if(send_buf.size()){
+        boost::this_thread::sleep(boost::posix_time::millisec(1));
+      }
+    }
+    return true;
+  }else{
+    boost::system::error_code ec;
+    std::string send_buf = str_send;
+    while(send_buf.size()){
+      size_t size = socket_.write_some(boost::asio::buffer(send_buf), ec);
+      if(ec){
+        std::cout<<ec.message()<<std::endl;
+        return false;
+      }
+      send_buf.erase(0, size);
+      if(send_buf.size()){
+        boost::this_thread::sleep(boost::posix_time::millisec(1));
+      }
+    }
+    return true;
+  }
 }
 
 void AsioHttpsSocket::ConnectToHost(const std::string& host_url){
@@ -228,7 +264,7 @@ void AsioHttpsSocket::OnHandShake(const boost::system::error_code &err){
     ErrorProcess(err.message());
   }else{
     send_buf_ = process_list_.front().first->ToString();
-    std::cout<<send_buf_<<std::endl;
+    //std::cout<<send_buf_<<std::endl;
     socket_ssl_.async_write_some(boost::asio::buffer(send_buf_), boost::bind(&AsioHttpsSocket::OnSend, this, _1, _2));
   }
 }
@@ -264,7 +300,35 @@ void AsioHttpsSocket::OnRead(const boost::system::error_code &err, std::size_t s
   }else{
 
     read_buf_tmp_[size] = 0;
-    std::cout<<"*************"<<read_buf_tmp_<<"**********"<<std::endl;
+    //std::cout<<"*************"<<read_buf_tmp_<<"**********"<<std::endl;
+    if(websocekt_){
+      std::lock_guard<std::recursive_mutex> lk(process_list_mutex_);
+      std::pair<std::shared_ptr<AsioHttpsRequest>, ResponseCallback> process_pair =  process_list_.front();
+      std::shared_ptr<HttpResponseMsgStruct> msg = std::make_shared<HttpResponseMsgStruct>();
+      if(websocket_head_ == false){
+        read_buf_.insert( read_buf_.end(), (char*)read_buf_tmp_, (char*)read_buf_tmp_ + size);
+        size_t pos = read_buf_.find("\r\n\r\n");
+
+        if(pos!= std::string::npos){
+          if(pos+4 != read_buf_.size()){
+            std::string str_tmp;
+            str_tmp = read_buf_.substr(pos+4);
+            msg->str_ori_ = str_tmp;
+            process_pair.second(process_pair.first, msg);
+          }
+          websocket_head_ = true;
+        }
+      }else{
+        msg->str_ori_.assign(read_buf_tmp_, size);
+        process_pair.second(process_pair.first, msg);
+      }
+      if(ssl_){
+        socket_ssl_.async_read_some(boost::asio::buffer(read_buf_tmp_, MAX_BUF_SIZE), boost::bind(&AsioHttpsSocket::OnRead, this, _1, _2));
+      }else{
+        socket_.async_read_some(boost::asio::buffer(read_buf_tmp_, MAX_BUF_SIZE), boost::bind(&AsioHttpsSocket::OnRead, this, _1, _2));
+      }
+      return;
+    }
     read_buf_.insert( read_buf_.end(), (char*)read_buf_tmp_, (char*)read_buf_tmp_ + size);
 
     std::shared_ptr<HttpResponseMsgStruct> msg = std::make_shared<HttpResponseMsgStruct>();
@@ -309,6 +373,7 @@ void AsioHttpsSocket::DoProcess(){
       //进行配置
       read_buf_.clear();
       send_buf_.clear();
+      websocket_head_ = false;
       last_error_ = false;
       host_ = pair.first->head_.GetAttribute("host");
       ssl_ = pair.first->config_.ssl_;
@@ -321,6 +386,7 @@ void AsioHttpsSocket::DoProcess(){
     }else{
       //相同的地址可以复用socket,直接跳过连接部分
       last_error_ = false;
+      websocket_head_ = false;
       read_buf_.clear();
       if(!ssl_){
         OnConnect(boost::system::error_code());
